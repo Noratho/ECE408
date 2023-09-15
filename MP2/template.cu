@@ -1,5 +1,8 @@
 
 #include <wb.h>
+#include <iostream>
+
+using namespace std;
 
 #define wbCheck(stmt)                                                \
   do                                                                 \
@@ -14,14 +17,26 @@
   } while (0)
 
 // Compute C = A * B TODO
-__global__ void matrixMultiply(float *A, float *B, float *C, int numARows,
-                               int numAColumns, int numBRows,
-                               int numBColumns, int numCRows,
-                               int numCColumns)
+__global__ void matrixMultiply(float *A, float *B, float *C,
+                               int numARows, int numAColumns,
+                               int numBRows, int numBColumns,
+                               int numCRows, int numCColumns)
 {
   //@@ Insert code to implement matrix multiplication here
+  int row = blockIdx.y * blockDim.y + threadIdx.y;
+  int col = blockIdx.x * blockDim.x + threadIdx.x;
+  float p = 0;
+
+  if (row < numARows && col < numBColumns)
+  {
+    for (int k = 0; k < numAColumns; ++k)
+    {
+      p += A[row * numAColumns + k] * B[k * numBColumns + col];
+    }
+    C[row * numBColumns + col] = p;
+  }
 }
-#define BLOCK_WIDTH 256
+#define BLOCK_WIDTH 16.0
 int main(int argc, char **argv)
 {
   wbArg_t args;
@@ -50,11 +65,12 @@ int main(int argc, char **argv)
   numCRows = numARows;
   numCColumns = numBColumns;
   //@@ Allocate the hostC matrix DONE
-  hostc = malloc(numARows * numBColumns * sizeof(float));
+  hostC = (float *)malloc(numCRows * numCColumns * sizeof(float));
   wbTime_stop(Generic, "Importing data and creating memory on host");
 
   wbLog(TRACE, "The dimensions of A are ", numARows, " x ", numAColumns);
   wbLog(TRACE, "The dimensions of B are ", numBRows, " x ", numBColumns);
+  // wbLog(TRACE, "The dimensions of C are ", numCRows, " x ", numCColumns);
 
   wbTime_start(GPU, "Allocating GPU memory.");
   //@@ Allocate GPU memory here DONE
@@ -72,8 +88,9 @@ int main(int argc, char **argv)
   wbTime_stop(GPU, "Copying input memory to the GPU.");
 
   //@@ Initialize the grid and block dimensions here DONE
-  dim3 DimGrid(ceil(numCColumns / BLOCK_WIDTH), ceil(numCRows / BLOCK_WIDTH), 1);
   dim3 DimBlock(BLOCK_WIDTH, BLOCK_WIDTH, 1);
+  dim3 DimGrid(ceil(numBColumns / BLOCK_WIDTH), ceil(numARows / BLOCK_WIDTH), 1);
+  // cout << DimGrid.x << " " << DimGrid.y << endl;
 
   wbTime_start(Compute, "Performing CUDA computation");
   //@@ Launch the GPU Kernel here DONE
@@ -87,7 +104,20 @@ int main(int argc, char **argv)
 
   wbTime_start(Copy, "Copying output memory to the CPU");
   //@@ Copy the GPU memory back to the CPU here DONE
-  cudaMemcpy(hostC, deviceC, numCRows * numCColumns * sizeof(float), cudaMemcpyDeviceToHost);
+  cudaMemcpy(hostC, deviceC, numARows * numBColumns * sizeof(float), cudaMemcpyDeviceToHost);
+
+  // if (numCColumns != numCRows && numCColumns < 64)
+  // {
+  //   for (int i = 0; i < numCRows; i++)
+  //   {
+  //     for (int j = 0; j < numCColumns; j++)
+  //     {
+  //       cout << hostC[i * numCRows + j] << " ";
+  //     }
+  //     cout << endl;
+  //   }
+  //   cout << endl;
+  // }
 
   wbTime_stop(Copy, "Copying output memory to the CPU");
 
