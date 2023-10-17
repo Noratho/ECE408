@@ -48,18 +48,23 @@ __host__ void GPUInterface::conv_forward_gpu_prolog(const float *host_output, co
                                                     const int B, const int M, const int C, const int H, const int W, const int K, const int S)
 {
     // Allocate memory and copy over the relevant data structures to the GPU
-    cuduaMalloc((void)&device_input_ptr, sizeof(float));
+    cudaMalloc((void**)device_input_ptr, B * H * W * C * sizeof(float));
+    cudaMalloc((void**)device_output_ptr, B * H * W * M * sizeof(float));
+    cudaMalloc((void**)device_mask_ptr, K * K * sizeof(float));
 
+    cudaMemcpy(*device_input_ptr, host_input, B * H * W * C * sizeof(float), cudaMemcpyHostToDevice);
+    cudaMemcpy(*device_output_ptr, host_output, B * H * W * M * sizeof(float), cudaMemcpyHostToDevice);
+    cudaMemcpy(*device_mask_ptr, host_mask, K * K * sizeof(float), cudaMemcpyHostToDevice);
     // We pass double pointers for you to initialize the relevant device pointers,
     //  which are passed to the other two functions.
 
     // Useful snippet for error checking
-    // cudaError_t error = cudaGetLastError();
-    // if(error != cudaSuccess)
-    // {
-    //     std::cout<<"CUDA error: "<<cudaGetErrorString(error)<<std::endl;
-    //     exit(-1);
-    // }
+    cudaError_t error = cudaGetLastError();
+    if(error != cudaSuccess)
+    {
+        std::cout<<"CUDA error: "<<cudaGetErrorString(error)<<std::endl;
+        exit(-1);
+    }
 }
 
 __host__ void GPUInterface::conv_forward_gpu(float *device_output, const float *device_input,
